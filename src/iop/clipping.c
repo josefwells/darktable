@@ -91,63 +91,126 @@ dt_iop_clipping_params_t;
 //static void _iop_clipping_update_ratios(dt_iop_module_t *self);
 static void keystone_type_populate(struct dt_iop_module_t *self,gboolean with_applied,int select);
 
-int
-legacy_params (dt_iop_module_t *self, const void *const old_params, const int old_version, void *new_params, const int new_version)
+int legacy_params (dt_iop_module_t *self, const void *const old_params, const int old_version, void *new_params, const int new_version)
 {
-  if (new_version == old_version) return 1;
-  if(new_version == 4)
+  if (new_version <= old_version) return 1;
+  if (new_version != 5) return 1;
+
+  dt_iop_clipping_params_t *n = (dt_iop_clipping_params_t *)new_params;
+  if(old_version==2 && new_version == 5)
   {
-    int old = old_version;
+    //old structure def
     typedef struct old_params_t
     {
       float angle, cx, cy, cw, ch, k_h, k_v;
     }
     old_params_t;
-    old_params_t *tmp = malloc(sizeof(old_params_t));
-    memcpy(tmp,old_params,sizeof(old_params_t));
-    //version 2 => version 3
-    if (old == 2)
+    
+    old_params_t *o = (old_params_t *)old_params;
+    
+    uint32_t intk = *(uint32_t *)&o->k_h;
+    int is_horizontal;
+    if(intk & 0x40000000u) is_horizontal = 1;
+    else                   is_horizontal = 0;
+    intk &= ~0x40000000;
+    float floatk = *(float *)&intk;
+    if(is_horizontal)
     {
-      uint32_t intk = *(uint32_t *)&tmp->k_h;
-      int is_horizontal;
-      if(intk & 0x40000000u) is_horizontal = 1;
-      else                   is_horizontal = 0;
-      intk &= ~0x40000000;
-      float floatk = *(float *)&intk;
-      if(is_horizontal)
-      {
-        tmp->k_h = floatk;
-        tmp->k_v = 0.0;
-      }
-      else
-      {
-        tmp->k_h = 0.0;
-        tmp->k_v = floatk;
-      }
-      old = 3;
+      n->k_h = floatk;
+      n->k_v = 0.0;
     }
-    //version 3 => version 4
-    if (old == 3)
+    else
     {
-      dt_iop_clipping_params_t *n = (dt_iop_clipping_params_t *)new_params;
-      //we copy all old values
-      n->angle=tmp->angle, n->cx=tmp->cx, n->cy=tmp->cy, n->cw=tmp->cw, n->ch=tmp->ch;
-      n->k_h=tmp->k_h, n->k_v=tmp->k_v;
-      //we set all value to default
-      n->kxa = n->kxd = 0.2f;
-      n->kxc = n->kxb = 0.8f;
-      n->kya = n->kyb = 0.2f;
-      n->kyc = n->kyd = 0.8f;
-      if (n->k_h ==0 && n->k_v==0) n->k_type = 0;
-      else n->k_type = 4;
-      n->k_sym = 0;
-      n->k_apply = 0;
-      n->crop_auto = 1;
+      n->k_h = 0.0;
+      n->k_v = floatk;
     }
-    free(tmp);
-    return 0;
+
+    n->angle=o->angle, n->cx=o->cx, n->cy=o->cy, n->cw=o->cw, n->ch=o->ch;
+    n->kxa = n->kxd = 0.2f;
+    n->kxc = n->kxb = 0.8f;
+    n->kya = n->kyb = 0.2f;
+    n->kyc = n->kyd = 0.8f;
+    if (n->k_h ==0 && n->k_v==0) n->k_type = 0;
+    else n->k_type = 4;
+    n->k_sym = 0;
+    n->k_apply = 0;
+    n->crop_auto = 1;
   }
-  return 1;
+  if(old_version==3 && new_version == 5)
+  {
+    //old structure def
+    typedef struct old_params_t
+    {
+      float angle, cx, cy, cw, ch, k_h, k_v;
+    }
+    old_params_t;
+    
+    old_params_t *o = (old_params_t *)old_params;
+
+    n->angle=o->angle, n->cx=o->cx, n->cy=o->cy, n->cw=o->cw, n->ch=o->ch;
+    n->k_h=o->k_h, n->k_v=o->k_v;
+    n->kxa = n->kxd = 0.2f;
+    n->kxc = n->kxb = 0.8f;
+    n->kya = n->kyb = 0.2f;
+    n->kyc = n->kyd = 0.8f;
+    if (n->k_h ==0 && n->k_v==0) n->k_type = 0;
+    else n->k_type = 4;
+    n->k_sym = 0;
+    n->k_apply = 0;
+    n->crop_auto = 1;
+  }
+  if(old_version==4 && new_version == 5)
+  {
+    typedef struct old_params_t
+    {
+      float angle, cx, cy, cw, ch, k_h, k_v;
+      float kxa, kya, kxb, kyb, kxc, kyc, kxd, kyd;
+      int k_type, k_sym;
+      int k_apply, crop_auto;
+    }
+    old_params_t;
+    
+    old_params_t *o = (old_params_t *)old_params;
+    
+    n->angle=o->angle, n->cx=o->cx, n->cy=o->cy, n->cw=o->cw, n->ch=o->ch;
+    n->k_h=o->k_h, n->k_v=o->k_v;
+    n->kxa=o->kxa, n->kxb=o->kxb, n->kxc=o->kxc, n->kxd=o->kxd;
+    n->kya=o->kya, n->kyb=o->kyb, n->kyc=o->kyc, n->kyd=o->kyd;
+    n->k_type = o->k_type;
+    n->k_sym = o->k_sym;
+    n->k_apply = o->k_apply;
+    n->crop_auto = o->crop_auto;
+  }
+    
+  //and now we try to "guess" clipping ratio
+  //  if no clipping yet, use default aspect ratio
+  printf("legacy %d %d\n",self->dev->image_storage.width,self->dev->image_storage.height);
+  if (fabsf(n->cw) == 1.0 && n->cx == 0.0 && fabsf(n->ch) == 1.0 && n->cy == 0.0) n->ratio_d=-1, n->ratio_n=-1;
+  else
+  {
+    const struct dt_interpolation* interpolation = dt_interpolation_new(DT_INTERPOLATION_USERPREF);
+    float whratio = ((float)(self->dev->image_storage.width - 2 * interpolation->width) * (fabsf(n->cw) - n->cx)) /
+      ((float)(self->dev->image_storage.height - 2 * interpolation->width) * (fabsf(n->ch) - n->cy));
+    float ri = self->dev->image_storage.width / (float)self->dev->image_storage.height;
+
+    float prec = 0.0003f;
+    if (fabsf(whratio-3.0f/2.0f)<prec) n->ratio_d=3, n->ratio_n=2;
+    else if (fabsf(whratio-3.0f/2.0f)<prec) n->ratio_d=3, n->ratio_n=2;
+    else if (fabsf(whratio-2.0f/1.0f)<prec) n->ratio_d=2, n->ratio_n=1;
+    else if (fabsf(whratio-7.0f/5.0f)<prec) n->ratio_d=7, n->ratio_n=5;
+    else if (fabsf(whratio-4.0f/3.0f)<prec) n->ratio_d=4, n->ratio_n=3;
+    else if (fabsf(whratio-5.0f/4.0f)<prec) n->ratio_d=5, n->ratio_n=4;
+    else if (fabsf(whratio-1.0f/1.0f)<prec) n->ratio_d=1, n->ratio_n=1;
+    else if (fabsf(whratio-16.0f/9.0f)<prec) n->ratio_d=16, n->ratio_n=9;
+    else if (fabsf(whratio-16.0f/10.0f)<prec) n->ratio_d=16, n->ratio_n=10;
+    else if (fabsf(whratio-244.5f/203.2f)<prec) n->ratio_d=2445, n->ratio_n=2032;
+    else if (fabsf(whratio-sqrtf(2.0))<prec) n->ratio_d=14142136, n->ratio_n=9;
+    else if (fabsf(whratio-PHI)<prec) n->ratio_d=16180340, n->ratio_n=10000000;
+    else if (fabsf(whratio-ri)<prec) n->ratio_d=1, n->ratio_n=10000000;
+    else n->ratio_d=0, n->ratio_n=0;
+  }
+
+  return 0;
 }
 typedef struct dt_iop_clipping_gui_data_t
 {
