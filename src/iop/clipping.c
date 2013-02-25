@@ -43,7 +43,7 @@
 #include <gdk/gdkkeysyms.h>
 #include <assert.h>
 
-DT_MODULE(4)
+DT_MODULE(5)
 
 
 // number of gui guides in combo box
@@ -184,7 +184,6 @@ int legacy_params (dt_iop_module_t *self, const void *const old_params, const in
     
   //and now we try to "guess" clipping ratio
   //  if no clipping yet, use default aspect ratio
-  printf("legacy %d %d\n",self->dev->image_storage.width,self->dev->image_storage.height);
   if (fabsf(n->cw) == 1.0 && n->cx == 0.0 && fabsf(n->ch) == 1.0 && n->cy == 0.0) n->ratio_d=-1, n->ratio_n=-1;
   else
   {
@@ -204,9 +203,9 @@ int legacy_params (dt_iop_module_t *self, const void *const old_params, const in
     else if (fabsf(whratio-16.0f/9.0f)<prec) n->ratio_d=16, n->ratio_n=9;
     else if (fabsf(whratio-16.0f/10.0f)<prec) n->ratio_d=16, n->ratio_n=10;
     else if (fabsf(whratio-244.5f/203.2f)<prec) n->ratio_d=2445, n->ratio_n=2032;
-    else if (fabsf(whratio-sqrtf(2.0))<prec) n->ratio_d=14142136, n->ratio_n=9;
+    else if (fabsf(whratio-sqrtf(2.0))<prec) n->ratio_d=14142136, n->ratio_n=10000000;
     else if (fabsf(whratio-PHI)<prec) n->ratio_d=16180340, n->ratio_n=10000000;
-    else if (fabsf(whratio-ri)<prec) n->ratio_d=1, n->ratio_n=10000000;
+    else if (fabsf(whratio-ri)<prec) n->ratio_d=1, n->ratio_n=0;
     else n->ratio_d=0, n->ratio_n=0;
   }
 
