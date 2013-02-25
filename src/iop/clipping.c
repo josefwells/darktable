@@ -45,8 +45,6 @@
 
 DT_MODULE(4)
 
-// number of gui ratios in combo box
-#define NUM_RATIOS 13
 
 // number of gui guides in combo box
 #define NUM_GUIDES 6
@@ -59,17 +57,38 @@ typedef enum dt_iop_clipping_flags_t
 }
 dt_iop_clipping_flags_t;
 
+/** clipping ratios */
+typedef enum dt_iop_clipping_ratios_flags_t
+{
+  RATIO_FREE,
+  RATIO_IMAGE,
+  RATIO_GOLDEN,
+  RATIO_1_2,
+  RATIO_3_2,
+  RATIO_7_5,
+  RATIO_4_3,
+  RATIO_5_4,
+  RATIO_1_1,
+  RATIO_DIN,
+  RATIO_16_9,
+  RATIO_16_10,
+  RATIO_10_8,
+  RATIO_COUNT //should always be the last entry
+}
+dt_iop_clipping_ratios_flags_t;
+
 typedef struct dt_iop_clipping_params_t
 {
   float angle, cx, cy, cw, ch, k_h, k_v;
   float kxa, kya, kxb, kyb, kxc, kyc, kxd, kyd;
   int k_type, k_sym;
   int k_apply, crop_auto;
+  int ratio_n, ratio_d;
 }
 dt_iop_clipping_params_t;
 
 /* calculate the aspect ratios for current image */
-static void _iop_clipping_update_ratios(dt_iop_module_t *self);
+//static void _iop_clipping_update_ratios(dt_iop_module_t *self);
 static void keystone_type_populate(struct dt_iop_module_t *self,gboolean with_applied,int select);
 
 int
@@ -157,8 +176,8 @@ typedef struct dt_iop_clipping_gui_data_t
   gboolean k_drag;
 
   int cropping, straightening, applied, center_lock;
-  float aspect_ratios[NUM_RATIOS];
-  float current_aspect;
+  //float aspect_ratios[NUM_RATIOS];
+  //float current_aspect;
 }
 dt_iop_clipping_gui_data_t;
 
@@ -196,6 +215,7 @@ dt_iop_clipping_global_data_t;
 
 static void commit_box(dt_iop_module_t *self, dt_iop_clipping_gui_data_t *g,
                        dt_iop_clipping_params_t *p);
+
 
 static void mul_mat_vec_2(const float *m, const float *p, float *o)
 {
@@ -1125,16 +1145,23 @@ void cleanup_pipe (struct dt_iop_module_t *self, dt_dev_pixelpipe_t *pipe, dt_de
   free(piece->data);
 }
 
+static float _ratio_get_aspect(dt_iop_module_t *self)
+{
+  dt_iop_clipping_params_t *p = (dt_iop_clipping_params_t *)self->params;
+  
+  if (p->ratio_d==0 && p->ratio_n==0) return -1.0f;
+  if (p->ratio_n==0) return self->dev->image_storage.width / (float)self->dev->image_storage.height;
+  return p->ratio_d/(float)p->ratio_n;
+}
 static void
 apply_box_aspect(dt_iop_module_t *self, int grab)
 {
-
   dt_iop_clipping_gui_data_t *g = (dt_iop_clipping_gui_data_t *)self->gui_data;
   int iwd, iht;
   dt_dev_get_processed_size(darktable.develop, &iwd, &iht);
   float wd = iwd, ht = iht;
   // enforce aspect ratio.
-  const float aspect = g->current_aspect;
+  const float aspect = _ratio_get_aspect(self);
 
   if(aspect > 0)
   {
@@ -1232,21 +1259,21 @@ void reload_defaults(dt_iop_module_t *self)
 {
   dt_iop_clipping_params_t tmp = (dt_iop_clipping_params_t)
   {
-    0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f, 0.2f, 0.2f, 0.8f, 0.2f, 0.8f, 0.8f, 0.2f, 0.8f, 0, 0,FALSE,TRUE
+    0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f, 0.2f, 0.2f, 0.8f, 0.2f, 0.8f, 0.8f, 0.2f, 0.8f, 0, 0,FALSE,TRUE,-1,-1
   };
   memcpy(self->params, &tmp, sizeof(dt_iop_clipping_params_t));
   memcpy(self->default_params, &tmp, sizeof(dt_iop_clipping_params_t));
   self->default_enabled = 0;
 }
 
-static void
-aspect_presets_changed (GtkWidget *combo, dt_iop_module_t *self)
+static void aspect_presets_changed (GtkWidget *combo, dt_iop_module_t *self)
 {
-  dt_iop_clipping_gui_data_t *g = (dt_iop_clipping_gui_data_t *)self->gui_data;
+  //dt_iop_clipping_gui_data_t *g = (dt_iop_clipping_gui_data_t *)self->gui_data;
+  dt_iop_clipping_params_t *p = (dt_iop_clipping_params_t *)self->params;
   int which = dt_bauhaus_combobox_get(combo);
   if (which < 0)
   {
-    // parse config param:
+    /*// parse config param:
     if(g->current_aspect == -1.0f)
     {
       g->current_aspect = dt_conf_get_float("plugins/darkroom/clipping/custom_aspect");
@@ -1261,7 +1288,7 @@ aspect_presets_changed (GtkWidget *combo, dt_iop_module_t *self)
     // user is typing, don't overwrite it.
     g->current_aspect = -2.0f;
     // reset to free aspect ratio:
-    dt_conf_set_int("plugins/darkroom/clipping/aspect_preset", -1);
+    dt_conf_set_int("plugins/darkroom/clipping/aspect_preset", -1);*/
 
     const char* text = dt_bauhaus_combobox_get_text(combo);
     if(text)
@@ -1272,18 +1299,42 @@ aspect_presets_changed (GtkWidget *combo, dt_iop_module_t *self)
       {
         // *c = '\0'; // not needed, atof will stop there.
         c++;
-        g->current_aspect = atof(text) / atof(c);
+        int d = atoi(text);
+        int n = atoi(c);
+        //some sanity check
+        if (n<=0 || d<=0)
+        {
+          dt_control_log(_("wrong manual ratio. should be \"number:number\""));
+          dt_bauhaus_combobox_set(combo,0);
+          return;
+        }
+        p->ratio_d = d;
+        p->ratio_n = n;
         if(self->dt->gui->reset) return;
         apply_box_aspect(self, 5);
         dt_control_queue_redraw_center();
       }
     }
   }
-  else if (which < NUM_RATIOS)
+  else if (which < RATIO_COUNT)
   {
     dt_conf_set_int("plugins/darkroom/clipping/aspect_preset", which);
 
-    g->current_aspect = g->aspect_ratios[which];
+    //g->current_aspect = g->aspect_ratios[which];
+    if (which==RATIO_10_8) p->ratio_d=2445, p->ratio_n=2032;
+    else if (which==RATIO_10_8) p->ratio_d=2445, p->ratio_n=2032;
+    else if (which==RATIO_16_10) p->ratio_d=16, p->ratio_n=10;
+    else if (which==RATIO_16_9) p->ratio_d=16, p->ratio_n=9;
+    else if (which==RATIO_1_1) p->ratio_d=1, p->ratio_n=1;
+    else if (which==RATIO_1_2) p->ratio_d=1, p->ratio_n=2;
+    else if (which==RATIO_3_2) p->ratio_d=3, p->ratio_n=2;
+    else if (which==RATIO_4_3) p->ratio_d=4, p->ratio_n=3;
+    else if (which==RATIO_5_4) p->ratio_d=5, p->ratio_n=4;
+    else if (which==RATIO_7_5) p->ratio_d=7, p->ratio_n=5;
+    else if (which==RATIO_DIN) p->ratio_d=14142136, p->ratio_n=10000000;
+    else if (which==RATIO_GOLDEN) p->ratio_d=16180340, p->ratio_n=10000000;
+    else if (which==RATIO_IMAGE) p->ratio_d=1, p->ratio_n=0;
+    else p->ratio_d=p->ratio_n=0;
 
     if(self->dt->gui->reset) return;
     apply_box_aspect(self, 5);
@@ -1373,7 +1424,7 @@ void gui_update(struct dt_iop_module_t *self)
   dt_iop_clipping_params_t *p = (dt_iop_clipping_params_t *)self->params;
 
   /* recalc aspect ratios for image */
-  _iop_clipping_update_ratios(self);
+  //_iop_clipping_update_ratios(self);
 
   /* update ui elements */
   dt_bauhaus_slider_set(g->angle, -p->angle);
@@ -1394,30 +1445,50 @@ void gui_update(struct dt_iop_module_t *self)
   //  to free aspect.
 
   int act = 0;
+  if (p->ratio_d==-1 && p->ratio_n==-1) act = dt_conf_get_int("plugins/darkroom/clipping/aspect_preset");
+  else
   {
-    //  if no clipping yet, use default aspect ratio
-    if (fabsf(p->cw) == 1.0 && p->cx == 0.0 && fabsf(p->ch) == 1.0 && p->cy == 0.0)
-      act = dt_conf_get_int("plugins/darkroom/clipping/aspect_preset");
+    int d = p->ratio_d, n = p->ratio_n;
+    if (d==0 && n==0) act=RATIO_FREE;
+    else if (n==0) act=RATIO_IMAGE;
+    else if (d==3 && n==2) act=RATIO_3_2;
+    else if (d==1 && n==2) act=RATIO_1_2;
+    else if (d==1 && n==1) act=RATIO_1_1;
+    else if (d==7 && n==5) act=RATIO_7_5;
+    else if (d==4 && n==3) act=RATIO_4_3;
+    else if (d==5 && n==4) act=RATIO_5_4;
+    else if (d==16 && n==9) act=RATIO_16_9;
+    else if (d==16 && n==10) act=RATIO_16_10;
+    else if (d==16180340 && n==10000000) act=RATIO_GOLDEN;
+    else if (d==14142136 && n==10000000) act=RATIO_DIN;
+    else if (d==2445 && n==2032) act=RATIO_10_8;
     else
     {
-      const struct dt_interpolation* interpolation = dt_interpolation_new(DT_INTERPOLATION_USERPREF);
-      float whratio = ((float)(self->dev->image_storage.width - 2 * interpolation->width) * (fabsf(p->cw) - p-> cx)) /
-        ((float)(self->dev->image_storage.height - 2 * interpolation->width) * (fabsf(p->ch) - p->cy));
-      float closest = 1000.0;
-
-      for (int k=1; k<NUM_RATIOS; k++)
-        if (fabsf(g->aspect_ratios[k] - whratio) < closest)
-        {
-          closest = fabsf(g->aspect_ratios[k] - whratio);
-          act = k;
-        }
-
-      if (closest > 0.003)
-        act = 0;
+      //we have a "manual" entry
+      act=-1;
     }
   }
-  if (act < -1 || act >= NUM_RATIOS)
-    act = 0;
+  /*//  if no clipping yet, use default aspect ratio
+  if (fabsf(p->cw) == 1.0 && p->cx == 0.0 && fabsf(p->ch) == 1.0 && p->cy == 0.0)
+    act = dt_conf_get_int("plugins/darkroom/clipping/aspect_preset");
+  else
+  {
+    const struct dt_interpolation* interpolation = dt_interpolation_new(DT_INTERPOLATION_USERPREF);
+    float whratio = ((float)(self->dev->image_storage.width - 2 * interpolation->width) * (fabsf(p->cw) - p-> cx)) /
+      ((float)(self->dev->image_storage.height - 2 * interpolation->width) * (fabsf(p->ch) - p->cy));
+    float closest = 1000.0;
+
+    for (int k=1; k<NUM_RATIOS; k++)
+      if (fabsf(g->aspect_ratios[k] - whratio) < closest)
+      {
+        closest = fabsf(g->aspect_ratios[k] - whratio);
+        act = k;
+      }
+
+    if (closest > 0.003)
+      act = 0;
+  }*/
+  if (act < -1 || act >= RATIO_COUNT) act = 0;
 
   //keystone :
   if (p->k_apply==1) g->k_show = 2; //needed to initialise correctly the combobox
@@ -1434,10 +1505,14 @@ void gui_update(struct dt_iop_module_t *self)
   /* special handling the combobox when current act is already selected
      callback is not called, let do it our self then..
    */
-  if (dt_bauhaus_combobox_get(g->aspect_presets) == act)
-    aspect_presets_changed(g->aspect_presets, self);
-  else
-    dt_bauhaus_combobox_set(g->aspect_presets, act);
+  if (act == -1)
+  {
+    char str[128];
+    snprintf(str,128,"%d:%d",p->ratio_d,p->ratio_n);
+    dt_bauhaus_combobox_set_text(g->aspect_presets, str);
+  }
+  if (dt_bauhaus_combobox_get(g->aspect_presets) == act) aspect_presets_changed(g->aspect_presets, self);
+  else dt_bauhaus_combobox_set(g->aspect_presets, act);
 
   // reset gui draw box to what we have in the parameters:
   g->applied = 1;
@@ -1490,8 +1565,8 @@ key_swap_callback(GtkAccelGroup *accel_group, GObject *acceleratable,
   (void)keyval;
   (void)modifier;
   dt_iop_module_t *self = (dt_iop_module_t *)d;
-  dt_iop_clipping_gui_data_t *g = (dt_iop_clipping_gui_data_t *)self->gui_data;
-  g->current_aspect = 1.0/g->current_aspect;
+  //dt_iop_clipping_gui_data_t *g = (dt_iop_clipping_gui_data_t *)self->gui_data;
+  //g->current_aspect = 1.0/g->current_aspect;
   apply_box_aspect(self, 5);
   dt_control_queue_redraw_center();
 }
@@ -1569,7 +1644,7 @@ void gui_init(struct dt_iop_module_t *self)
   dt_iop_clipping_gui_data_t *g = (dt_iop_clipping_gui_data_t *)self->gui_data;
   dt_iop_clipping_params_t *p = (dt_iop_clipping_params_t *)self->params;
 
-  g->current_aspect = -1.0f;
+  //g->current_aspect = -1.0f;
   g->clip_x = g->clip_y = g->handle_x = g->handle_y = 0.0;
   g->clip_w = g->clip_h = 1.0;
   g->old_clip_x = g->old_clip_y = 0.0;
@@ -1640,7 +1715,7 @@ void gui_init(struct dt_iop_module_t *self)
   dt_bauhaus_combobox_add(g->aspect_presets, _("10:8 in print"));
 
   int act = dt_conf_get_int("plugins/darkroom/clipping/aspect_preset");
-  if(act < 0 || act >= NUM_RATIOS) act = 0;
+  if(act < 0 || act >= RATIO_COUNT) act = 0;
   dt_bauhaus_combobox_set(g->aspect_presets, act);
   g_signal_connect (G_OBJECT (g->aspect_presets), "value-changed", G_CALLBACK (aspect_presets_changed), self);
   g_object_set(G_OBJECT(g->aspect_presets), "tooltip-text", _("set the aspect ratio (w:h)"), (char *)NULL);
@@ -1690,13 +1765,13 @@ void gui_init(struct dt_iop_module_t *self)
   gtk_widget_set_no_show_all(g->flip_guides, TRUE);
   gtk_widget_set_no_show_all(g->golden_extras, TRUE);
 
-  _iop_clipping_update_ratios(self);
+  //_iop_clipping_update_ratios(self);
 
   /* set default aspect ratio */
-  g->current_aspect = g->aspect_ratios[act];
+  //g->current_aspect = g->aspect_ratios[act];
 }
 
-void _iop_clipping_update_ratios(dt_iop_module_t *self)
+/*void _iop_clipping_update_ratios(dt_iop_module_t *self)
 {
   dt_iop_clipping_gui_data_t *g = self->gui_data;
 
@@ -1717,14 +1792,14 @@ void _iop_clipping_update_ratios(dt_iop_module_t *self)
   // if adding new presets, make sure to change this as well:
   assert(NUM_RATIOS == 13);
 
-  /* swap default fixed ratios for portraits */
+  // swap default fixed ratios for portraits 
   if (g->aspect_ratios[1] < 1.0)
   {
     for (int k=2; k<NUM_RATIOS; k++)
       g->aspect_ratios[k] = 1.0 / g->aspect_ratios[k];
   }
 
-}
+}*/
 
 void gui_cleanup(struct dt_iop_module_t *self)
 {
