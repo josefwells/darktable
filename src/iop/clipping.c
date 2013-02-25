@@ -2498,6 +2498,21 @@ int mouse_moved(struct dt_iop_module_t *self, double x, double y, int which)
         if(g->clip_y + g->clip_h > g->clip_max_h + g->clip_max_y) g->clip_h = g->clip_max_h + g->clip_max_y - g->clip_y;
       }
       apply_box_aspect(self, grab);
+      //we save crop params too
+      float wd = self->dev->preview_pipe->backbuf_width;
+      float ht = self->dev->preview_pipe->backbuf_height;
+      float points[4] = {g->clip_x*wd,g->clip_y*ht,(g->clip_x+g->clip_w)*wd,(g->clip_y+g->clip_h)*ht};
+      if (dt_dev_distort_backtransform_plus(self->dev,self->dev->preview_pipe,self->priority+1,9999999,points,2))
+      {
+        dt_dev_pixelpipe_iop_t *piece = dt_dev_distort_get_iop_pipe(self->dev,self->dev->preview_pipe,self);
+        if (piece)
+        {
+          p->cx = points[0]/(float)piece->buf_out.width;
+          p->cy = points[1]/(float)piece->buf_out.height;
+          p->cw = copysignf(points[2]/(float)piece->buf_out.width, p->cw);
+          p->ch = copysignf(points[3]/(float)piece->buf_out.height, p->ch);
+        }
+      }
     }
     dt_control_queue_redraw_center();
     return 1;
