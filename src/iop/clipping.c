@@ -513,7 +513,7 @@ static int _iop_clipping_set_max_clip (struct dt_iop_module_t *self)
 // this is always called with the full buffer before processing.
 void modify_roi_out(struct dt_iop_module_t *self, struct dt_dev_pixelpipe_iop_t *piece, dt_iop_roi_t *roi_out, const dt_iop_roi_t *roi_in_orig)
 {
-  const struct dt_interpolation* interpolation = dt_interpolation_new(DT_INTERPOLATION_USERPREF);
+  //const struct dt_interpolation* interpolation = dt_interpolation_new(DT_INTERPOLATION_USERPREF);
 
   dt_iop_roi_t roi_in_d = *roi_in_orig;
   dt_iop_roi_t* roi_in = &roi_in_d;
@@ -544,10 +544,10 @@ void modify_roi_out(struct dt_iop_module_t *self, struct dt_dev_pixelpipe_iop_t 
   {
     /* Account for interpolation constraints right now, so when doing the
      * backtransform in modify_roi_in all nicely fits */
-    roi_in->x += interpolation->width;
-    roi_in->y += interpolation->width;
-    roi_in->width -= 2*interpolation->width;
-    roi_in->height -= 2*interpolation->width;
+    //roi_in->x += interpolation->width;
+    //roi_in->y += interpolation->width;
+    //roi_in->width -= 2*interpolation->width;
+    //roi_in->height -= 2*interpolation->width;
     *roi_out = *roi_in;
 
     // correct keystone correction factors by resolution of this buffer
@@ -752,11 +752,11 @@ void modify_roi_in(struct dt_iop_module_t *self, struct dt_dev_pixelpipe_iop_t *
   }
 
   // adjust roi_in to minimally needed region
-  const struct dt_interpolation* interpolation = dt_interpolation_new(DT_INTERPOLATION_USERPREF);
-  roi_in->x      = aabb_in[0] - interpolation->width;
-  roi_in->y      = aabb_in[1] - interpolation->width;
-  roi_in->width  = aabb_in[2]-aabb_in[0]+2*interpolation->width;
-  roi_in->height = aabb_in[3]-aabb_in[1]+2*interpolation->width;
+  //const struct dt_interpolation* interpolation = dt_interpolation_new(DT_INTERPOLATION_USERPREF);
+  roi_in->x      = aabb_in[0];// - interpolation->width;
+  roi_in->y      = aabb_in[1];// - interpolation->width;
+  roi_in->width  = aabb_in[2]-aabb_in[0];//+2*interpolation->width;
+  roi_in->height = aabb_in[3]-aabb_in[1];//+2*interpolation->width;
 
   if(d->angle == 0.0f && d->all_off)
   {
@@ -1403,7 +1403,7 @@ static void aspect_presets_changed (GtkWidget *combo, dt_iop_module_t *self)
   {
     p->ratio_d = d;
     p->ratio_n = n;
-    dt_conf_set_int("plugins/darkroom/clipping/ratio_d", p->ratio_d);
+    dt_conf_set_int("plugins/darkroom/clipping/ratio_d", fabsf(p->ratio_d));
     dt_conf_set_int("plugins/darkroom/clipping/ratio_n", p->ratio_n);
     if(self->dt->gui->reset) return;
     apply_box_aspect(self, 5);
