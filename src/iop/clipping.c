@@ -1213,7 +1213,7 @@ static float _ratio_get_aspect(dt_iop_module_t *self)
   
   if (p->ratio_d==0 && p->ratio_n==0) return -1.0f;
   float d=1.0f, n=1.0f;
-  if (p->ratio_n==0) d=self->dev->image_storage.width, n=self->dev->image_storage.height;
+  if (p->ratio_n==0) d=copysign(self->dev->image_storage.width,p->ratio_d), n=self->dev->image_storage.height;
   else d=p->ratio_d, n=p->ratio_n;
   
   if (d<0) return -n/d;
@@ -1403,7 +1403,7 @@ static void aspect_presets_changed (GtkWidget *combo, dt_iop_module_t *self)
   {
     p->ratio_d = d;
     p->ratio_n = n;
-    dt_conf_set_int("plugins/darkroom/clipping/ratio_d", fabsf(p->ratio_d));
+    dt_conf_set_int("plugins/darkroom/clipping/ratio_d", abs(p->ratio_d));
     dt_conf_set_int("plugins/darkroom/clipping/ratio_n", p->ratio_n);
     if(self->dt->gui->reset) return;
     apply_box_aspect(self, 5);
@@ -1633,8 +1633,6 @@ key_swap_callback(GtkAccelGroup *accel_group, GObject *acceleratable,
   (void)keyval;
   (void)modifier;
   dt_iop_module_t *self = (dt_iop_module_t *)d;
-  //dt_iop_clipping_gui_data_t *g = (dt_iop_clipping_gui_data_t *)self->gui_data;
-  //g->current_aspect = 1.0/g->current_aspect;
   dt_iop_clipping_params_t   *p = (dt_iop_clipping_params_t   *)self->params;
   p->ratio_d = -p->ratio_d;
   apply_box_aspect(self, 5);
