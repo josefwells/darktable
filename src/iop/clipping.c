@@ -238,8 +238,7 @@ typedef struct dt_iop_clipping_gui_data_t
   gboolean k_drag;
 
   int cropping, straightening, applied, center_lock;
-  //float aspect_ratios[NUM_RATIOS];
-  //float current_aspect;
+  int old_width, old_height;
 }
 dt_iop_clipping_gui_data_t;
 
@@ -1174,6 +1173,15 @@ void gui_focus (struct dt_iop_module_t *self, gboolean in)
       g->clip_w = fabsf(p->cw) - p->cx;
       g->clip_y = p->cy;
       g->clip_h = fabsf(p->ch) - p->cy;
+      if (g->clip_x>0 || g->clip_y>0 || g->clip_h<1.0f || g->clip_w<1.0f)
+      {
+        g->old_width = self->dev->preview_pipe->backbuf_width;
+        g->old_height = self->dev->preview_pipe->backbuf_height;
+      }
+      else
+      {
+        g->old_width = g->old_height = -1;
+      }
       // flip one bit to trigger the cache:
       uint32_t hack = *(uint32_t*)&p->cy;
       hack ^= 1;
@@ -1726,6 +1734,7 @@ void gui_init(struct dt_iop_module_t *self)
   g->k_drag = FALSE;
   g->k_show = -1;
   g->k_selected = -1;
+  g->old_width = g->old_height = -1;
 
   self->widget = gtk_vbox_new(FALSE, DT_BAUHAUS_SPACE);
   g->hvflip = dt_bauhaus_combobox_new(self);
@@ -1915,6 +1924,10 @@ void gui_post_expose(struct dt_iop_module_t *self, cairo_t *cr, int32_t width, i
   dt_iop_clipping_gui_data_t *g = (dt_iop_clipping_gui_data_t *)self->gui_data;
   dt_iop_clipping_params_t *p = (dt_iop_clipping_params_t *)self->params;
 
+  //we don't do anything if the image is not ready
+  if (self->dev->preview_pipe->backbuf_width==g->old_width && self->dev->preview_pipe->backbuf_height==g->old_height) return;
+  g->old_width = g->old_height = -1;
+  
   //reapply box aspect to be sure that the ratio has not been modified by the keystone transform
   apply_box_aspect(self,5);
 
@@ -2372,6 +2385,10 @@ int mouse_moved(struct dt_iop_module_t *self, double x, double y, int which)
   dt_iop_clipping_gui_data_t *g = (dt_iop_clipping_gui_data_t *)self->gui_data;
   dt_iop_clipping_params_t *p = (dt_iop_clipping_params_t *)self->params;
 
+  //we don't do anything if the image is not ready
+  if (self->dev->preview_pipe->backbuf_width==g->old_width && self->dev->preview_pipe->backbuf_height==g->old_height) return 0;
+  g->old_width = g->old_height = -1;
+  
   int32_t zoom, closeup;
   float wd = self->dev->preview_pipe->backbuf_width;
   float ht = self->dev->preview_pipe->backbuf_height;
@@ -2674,6 +2691,10 @@ commit_box (dt_iop_module_t *self, dt_iop_clipping_gui_data_t *g, dt_iop_clippin
 int button_released(struct dt_iop_module_t *self, double x, double y, int which, uint32_t state)
 {
   dt_iop_clipping_gui_data_t *g = (dt_iop_clipping_gui_data_t *)self->gui_data;
+  //we don't do anything if the image is not ready
+  if (self->dev->preview_pipe->backbuf_width==g->old_width && self->dev->preview_pipe->backbuf_height==g->old_height) return 0;
+  g->old_width = g->old_height = -1;
+  
   if(g->straightening)
   {
     float dx = x - g->button_down_x, dy = y - g->button_down_y;
@@ -2704,8 +2725,13 @@ int button_released(struct dt_iop_module_t *self, double x, double y, int which,
 
 int button_pressed(struct dt_iop_module_t *self, double x, double y, int which, int type, uint32_t state)
 {
+
   dt_iop_clipping_gui_data_t *g = (dt_iop_clipping_gui_data_t *)self->gui_data;
   dt_iop_clipping_params_t   *p = (dt_iop_clipping_params_t   *)self->params;
+  //we don't do anything if the image is not ready
+  if (self->dev->preview_pipe->backbuf_width==g->old_width && self->dev->preview_pipe->backbuf_height==g->old_height) return 0;
+  g->old_width = g->old_height = -1;
+  
   // avoid unexpected back to lt mode:
   if(type == GDK_2BUTTON_PRESS && which == 1)
   {
